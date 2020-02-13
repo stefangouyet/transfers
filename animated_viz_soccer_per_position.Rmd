@@ -1,0 +1,129 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+ 
+
+```{r include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(gganimate)
+```
+
+
+
+```{r include=FALSE}
+
+df <- read_csv('master_transfers_list.csv')
+
+
+```
+
+```{r}
+
+df <- df %>% mutate(broad_position = case_when(position %in% c('Centre-Forward',
+                                                               'Left Winger',
+                                                               'Right Winger',
+                                                               'Striker',
+                                                               'Second Striker',
+                                                               'Forward') ~ 'Attacker',
+                                               position %in% c('Central Midfield',
+                                                               'Attacking Midfield',
+                                                               'Defensive Midfield',
+                                                               'Right Midfield',
+                                                               'Midfielder') ~ "Midfielder",
+                                               position %in% c('Goalkeeper') ~ "Goalkeeper",
+                                               TRUE ~ "Defender"))
+
+
+
+```
+
+```{r}
+#
+df <- df %>% filter(fee_cleaned > 0.1,
+                    transfer_movement == 'in')
+
+df <- df %>% mutate(player_name_club = paste0(player_name, ' (', club_name, ')'),
+                    year = as.numeric(substr(season,0,4)))
+df <- df%>% distinct(player_name_club, .keep_all = TRUE)
+
+
+df$broad_position = factor(df$broad_position, levels=c('Attacker','Midfielder','Defender','Goalkeeper'))
+
+```
+
+```{r create static chart}
+
+
+
+static_gg <- anim_df_test %>% group_by(broad_position) %>% #%>% top_n(5, wt=fee_cleaned) 
+ ggplot(aes(x =
+reorder(player_name_club, fee_cleaned), y = fee_cleaned)) + geom_bar(stat='identity',position = "identity") + coord_flip() + facet_wrap(~broad_position, scales = 'free_y', ncol = 1) 
+
+static_gg
+
+
+```
+
+```{r}
+
+test_df <- df %>% filter(year>2014)
+
+#test_df <- test_df %>%
+#  group_by(year, broad_position) %>%
+ # top_n(5, wt=fee_cleaned) %>%
+  #ungroup()
+
+data <- df %>%
+    group_by(year) %>%
+    arrange(-fee_cleaned) %>%
+    mutate(rank=row_number()) %>%
+    filter(rank<=10)
+
+
+static_gg <- data %>%
+ ggplot(aes(x =
+reorder(player_name_club, fee_cleaned), y = fee_cleaned)) + geom_tile(aes(
+    y = fee_cleaned / 2,
+    height = fee_cleaned,
+    width = 0.9,
+    fill = "blue"
+  ), alpha = 0.8, color = NA)+ coord_flip(clip = "off") +
+facet_wrap(~broad_position, scales = 'free_x', ncol = 1) + geom_text(aes(y = fee_cleaned, label = fee_cleaned, hjust = 0)) + scale_y_continuous()
+
+static_gg
+
+```
+
+```{r create animated chart with gganimate}
+
+#static_gg + labs(title = "Year: {frame_time}", x = "", y = "GDP (2012$ billions") +
+#  transition_time(year) +
+#  ease_aes('linear')  
+
+static_gg + transition_time(year) +
+        ease_aes('cubic-in-out') +
+        labs(title='Largest Cities in the United States',
+             subtitle='Population in {round(frame_time,0)}',
+             caption='Source: United States Census
+michaeltoth.me / @michael_toth')
+
+static_gg+transition_states(year, transition_length = 4, state_length = 1) +ease_aes('cubic-in-out')+view_follow()
+
+#+ transition_time(year)
+
+  
+  transition_states(year, transition_length = 3, state_length = 1) + ease_aes('quadratic-in-out') + enter_drift(x_mod = -1) + exit_drift(x_mod = 1) + view_follow(fixed_x = TRUE)
+#+
+#  gganimate::ease_aes("cubic-in-out")
+animate(animated_gg, nframes=10)
+```
+
+```{r}
+
+animate(animated_gg, 200, fps = 20,  width = 1200, height = 1000, 
+        renderer = gifski_renderer("soccer_animated_viz.gif"))
+
+```
+
